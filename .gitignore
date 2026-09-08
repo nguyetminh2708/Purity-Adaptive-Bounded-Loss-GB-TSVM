@@ -219,3 +219,6 @@ __marimo__/
 
 # README giu o local, khong push (theo yeu cau)
 README.md
+data/raw/
+results/*.csv
+_replaced_old/
