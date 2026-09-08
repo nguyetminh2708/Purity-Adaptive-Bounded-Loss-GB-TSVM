@@ -8,6 +8,7 @@ noise kinds and the configured rates. Plot with plot_diagnosis.py.
 """
 from __future__ import annotations
 import sys, pathlib, argparse, warnings
+from datetime import datetime
 warnings.filterwarnings("ignore")
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "src"))
@@ -97,6 +98,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--quick", action="store_true")
     ap.add_argument("--datasets", nargs="*")
+    ap.add_argument("--tag", default="", help="optional label appended to the run folder")
     args = ap.parse_args()
     seeds = SEEDS[:3] if args.quick else SEEDS
     rates = [0.0, 0.2, 0.4] if args.quick else NOISE_RATES
@@ -110,10 +112,12 @@ def main():
             ball_all += b; acc_all += a
         except Exception as e:
             print(f"  skip {name}: {type(e).__name__}: {str(e)[:70]}")
+    ts = datetime.now().strftime("%y%m%d_%H%M%S")
+    prefix = ts + (f"_{args.tag}" if args.tag else "")
     RESULTS.mkdir(parents=True, exist_ok=True)
-    pd.DataFrame(ball_all).to_csv(RESULTS / "diagnosis_balls.csv", index=False)
-    pd.DataFrame(acc_all).to_csv(RESULTS / "diagnosis_acc.csv", index=False)
-    print(f"wrote {RESULTS/'diagnosis_balls.csv'} and diagnosis_acc.csv")
+    pd.DataFrame(ball_all).to_csv(RESULTS / f"{prefix}_diagnosis_balls.csv", index=False)
+    pd.DataFrame(acc_all).to_csv(RESULTS / f"{prefix}_diagnosis_acc.csv", index=False)
+    print(f"wrote {prefix}_diagnosis_*.csv to results/")
 
 
 if __name__ == "__main__":
