@@ -1,13 +1,11 @@
-"""Tiem nhieu nhan - 4 kieu, CHI ap dung cho tap huan luyen (test giu nhan sach).
+"""Label-noise injection, four kinds. Applied to training labels only.
 
-Kieu nhieu (theo taxonomy Frenay & Verleysen, IEEE TNNLS 2014):
-  symmetric  - NCAR: lat nhan ngau nhien deu, ti le `rate`.
-  asymmetric - NAR:  chi lat mot chieu (+1 -> -1), ti le `rate` tren lop +1.
-  boundary   - NNAR: uu tien lat diem gan bien quyet dinh (margin nho nhat).
-  far        - outlier sai nhan: lat cac diem XA tam lop cua chinh no nhat.
+symmetric  random flip (NCAR)
+asymmetric one-directional flip on the +1 class (NAR)
+boundary   flip points nearest the decision boundary (NNAR)
+far        flip points farthest from their own class centre (outliers)
 
-Moi ham tra ve (y_noisy, flipped_mask) - mask de doi chieu ground truth
-trong thi nghiem "lambda_k co tuong quan voi ti le nhan lat that khong".
+Each returns (y_noisy, flipped_mask); y in {-1, +1}.
 """
 from __future__ import annotations
 import numpy as np
@@ -22,9 +20,7 @@ def _flip(y, pick):
     return y2, m
 
 
-def inject(X: np.ndarray, y: np.ndarray, rate: float, kind: str = "symmetric",
-           seed: int = 0):
-    """y in {-1,+1}. rate trong [0, 0.5]. Tra ve (y_noisy, flipped_mask)."""
+def inject(X, y, rate, kind="symmetric", seed=0):
     assert kind in NOISE_KINDS, kind
     y = np.asarray(y).astype(int)
     rng = np.random.default_rng(seed)
@@ -34,18 +30,14 @@ def inject(X: np.ndarray, y: np.ndarray, rate: float, kind: str = "symmetric",
 
     if kind == "symmetric":
         pick = rng.choice(len(y), size=n_flip, replace=False)
-
     elif kind == "asymmetric":
         pos = np.flatnonzero(y == 1)
         k = min(int(round(rate * len(pos))), len(pos))
         pick = rng.choice(pos, size=k, replace=False)
-
     elif kind == "boundary":
-        # margin |f(x)| nho nhat = gan bien; lay ngau nhien trong nhom 2*n_flip gan nhat
         f = LogisticRegression(max_iter=1000).fit(X, y).decision_function(X)
         cand = np.argsort(np.abs(f))[: min(2 * n_flip, len(y))]
         pick = rng.choice(cand, size=min(n_flip, len(cand)), replace=False)
-
     else:  # far
         d = np.empty(len(y))
         for c in (-1, 1):
