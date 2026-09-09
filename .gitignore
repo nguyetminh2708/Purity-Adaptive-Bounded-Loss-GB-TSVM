@@ -217,7 +217,7 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 README.md
-data/raw/
 results/*.csv
 *.pyc
 results/*.png
+data/raw/globalcancer.csv

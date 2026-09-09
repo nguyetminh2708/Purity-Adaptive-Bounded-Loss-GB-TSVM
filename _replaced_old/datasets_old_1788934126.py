@@ -17,7 +17,6 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import LabelEncoder
-from scipy.io import arff as _arff
 
 DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
 
@@ -122,40 +121,8 @@ def inject_label_noise(y, rate, rng):
     return y
 
 
-def _haberman():
-    a = np.loadtxt(DATA_DIR / "haberman.data", delimiter=",")
-    return _finish(a[:, :-1], a[:, -1], "haberman")
-
-
-def _heart():
-    # processed Cleveland: 13 features, target 0..4 -> binary (disease vs not); "?" -> NaN
-    df = pd.read_csv(DATA_DIR / "processed.cleveland.data", header=None, na_values="?")
-    y = (df.iloc[:, -1].to_numpy() > 0).astype(int)
-    return _finish(df.iloc[:, :-1], y, "heart")
-
-
-def _load_arff(name):
-    data, _ = _arff.loadarff(str(DATA_DIR / f"{name}.arff"))
-    df = pd.DataFrame(data)
-    for c in df.columns:                       # nominal columns come back as bytes
-        if df[c].dtype == object:
-            df[c] = df[c].apply(lambda v: v.decode() if isinstance(v, bytes) else v)
-    df = df.replace("?", np.nan)
-    tcol = next((c for c in df.columns if c.lower() in ("class", "target")), df.columns[-1])
-    y = df[tcol].to_numpy()
-    X = pd.get_dummies(df.drop(columns=[tcol]), drop_first=True).astype(float)
-    return _finish(X.to_numpy(), y, name)
-
-
 REGISTRY = {
     "balance_scale":     _balance_scale,
-    "haberman":          _haberman,
-    "heart":             _heart,
-    "ionosphere":        lambda: _load_arff("ionosphere"),
-    "sonar":             lambda: _load_arff("sonar"),
-    "banknote":          lambda: _load_arff("banknote"),
-    "australian":        lambda: _load_arff("australian-credit"),
-    "german":            lambda: _load_arff("german-credit"),
     "iris":              lambda: _sk("load_iris", "iris"),
     "wine":              lambda: _sk("load_wine", "wine"),
     "breast_cancer":     lambda: _sk("load_breast_cancer", "breast_cancer"),

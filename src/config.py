@@ -15,4 +15,5 @@ PURITY_DEFAULT = 1.0
 N_FOLDS = 5
 
 # binary sets that load without network (openml/ucimlrepo are firewalled here)
-DATASETS_BINARY = ["balance_scale", "breast_cancer", "SPECTF", "chess_krvkp"]
+DATASETS_BINARY = ["balance_scale", "breast_cancer", "SPECTF", "chess_krvkp", "haberman", "heart",
+                   "ionosphere", "sonar", "banknote", "australian", "german"]
