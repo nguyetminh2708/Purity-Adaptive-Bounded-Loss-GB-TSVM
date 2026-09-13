@@ -221,5 +221,6 @@ results/*.csv
 *.pyc
 results/*.png
 data/raw/globalcancer.csv
-results/PA-BL/
-_replaced_old/
+
+# private research notes — keep local, do not push
+docs/

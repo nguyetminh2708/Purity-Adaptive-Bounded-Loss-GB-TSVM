@@ -1,0 +1,35 @@
+# Run log
+
+Mỗi dòng = một lần chạy: giờ, file kết quả, script, tham số.
+
+| time | file | script | params |
+|---|---|---|---|
+| 260909_062905 | `260909_062905_compare.csv` | compare | datasets=breast_cancer,balance_scale,haberman,heart, seeds=3, rates=[0.0, 0.2, 0.4], C=10.0, lam0=1.0, kappa=2.0, steps=500 |
+| 260909_063257 | `260909_063257_compare.csv` | compare | datasets=breast_cancer,balance_scale,SPECTF,haberman,heart, seeds=3, rates=[0.0, 0.2, 0.4], C=10.0, lam0=1.0, kappa=2.0, steps=500 |
+| 260909_063433 | `260909_063433_compare.csv` | compare | datasets=chess_krvkp, seeds=2, rates=[0.0, 0.2, 0.4], C=10.0, lam0=1.0, kappa=2.0, steps=400 |
+| 260909_065500 | `260909_065500_compare.csv` | compare | datasets=breast_cancer,balance_scale,SPECTF,haberman,heart, seeds=3, rates=[0.0, 0.2, 0.4], C=10.0, lam0=1.0, kappa=2.0, steps=500 |
+| 260909_071741 | `260909_071741_compare.csv` | compare | datasets=breast_cancer,balance_scale,SPECTF,haberman,heart,ionosphere,sonar,banknote,australian,german, seeds=3, rates=[0.0, 0.2], C=10.0, lam0=1.0, kappa=2.0, steps=500 |
+| 260909_071920 | `260909_071920_compare.csv` | compare | datasets=breast_cancer,balance_scale,SPECTF,haberman,heart,ionosphere,sonar,banknote,australian,german, seeds=3, rates=[0.4], C=10.0, lam0=1.0, kappa=2.0, steps=500 |
+| 260909_072128 | `260909_072128_compare.csv` | compare | datasets=chess_krvkp, seeds=2, rates=[0.0, 0.2, 0.4], C=10.0, lam0=1.0, kappa=2.0, steps=400 |
+| 260909_091838 | `260909_091838_compare_linear.csv` | compare_linear | kernel=linear, datasets=breast_cancer,balance_scale,SPECTF,haberman,heart,ionosphere,sonar,banknote,australian,german, seeds=3, rates=[0.2, 0.4], C=10.0, lam0=1.0, kappa=2.0, steps=500 |
+| 260909_092155 | `260909_092155_compare_rbf.csv` | compare_rbf | kernel=rbf, datasets=breast_cancer,balance_scale,SPECTF,haberman,heart,ionosphere,sonar,banknote,australian,german, seeds=3, rates=[0.2, 0.4], C=10.0, lam0=1.0, kappa=2.0, steps=500 |
+| 260909_093745 | `260909_093745_compare_linear.csv` | compare_linear | kernel=linear, datasets=breast_cancer,balance_scale,SPECTF,haberman,heart,ionosphere,sonar,banknote,australian,german, seeds=3, rates=[0.2, 0.4], C=10.0, lam0=1.0, kappa=2.0, steps=500 |
+| 260909_094151 | `260909_094151_compare_rbf.csv` | compare_rbf | kernel=rbf, datasets=breast_cancer,balance_scale,SPECTF,haberman,heart,ionosphere,sonar,banknote,australian,german, seeds=3, rates=[0.2, 0.4], C=10.0, lam0=1.0, kappa=2.0, steps=500 |
+| 260909_095613 | `260909_095613_compare_linear.csv` | compare_linear | kernel=linear, datasets=breast_cancer,balance_scale,SPECTF,haberman,heart,ionosphere,sonar,banknote,australian,german, seeds=3, rates=[0.2, 0.3, 0.4], C=10.0, lam0=1.0, kappa=2.0, steps=500 |
+| 260909_102348 | `260909_102348_tunewave_linear.csv` | tunewave_linear | kernel=linear, datasets=breast_cancer,balance_scale,sonar, rates=[0.2, 0.4], grid=C[1,10] lam0[.5,1,2,4] kappa[0,2,4], steps=400 |
+| 260910_054630 | `260910_054630_tunecmp_linear.csv` | tunecmp_linear | kernel=linear, datasets=sonar, rates=[0.3], nested=outer5 inner3, steps=200, grids=svmC[1,10] d[.01,.1,1] eta[.2,.3,.4] wave24 wave2_4 |
+| 260910_054716 | `260910_054716_tunecmp_linear.csv` | tunecmp_linear | kernel=linear, datasets=german, rates=[0.3], nested=outer5 inner3, steps=300, grids=svmC[1,10] d[.01,.1,1] eta[.2,.3,.4] wave24 wave2_4 |
+| 260910_055808 | `260910_055808_tunecmp_linear.csv` | tunecmp_linear | kernel=linear, datasets=balance_scale,breast_cancer,SPECTF,haberman,heart,ionosphere,sonar,banknote,australian,german, rates=[0.2, 0.3, 0.4], nested=outer5 inner3, steps=300, grids=svmC[1,10] d[.01,.1,1] eta[.2,.3,.4] wave24 wave2_4 |
+| 260910_061428 | `260910_061428_tunecmp_rbf.csv` | tunecmp_rbf | kernel=rbf, datasets=balance_scale,breast_cancer,SPECTF,haberman,heart,ionosphere,sonar,banknote,australian,german, rates=[0.2, 0.3, 0.4], nested=outer5 inner3, steps=300, grids=svmC[1,10] d[.01,.1,1] eta[.2,.3,.4] wave24 wave2_4 |
+| 260913_005354 | `260913_005354_bench_linear.csv` | bench_linear | kernel=linear, rate=0.3, reps=3, steps=300, params=svmC=10 GBd=.1 wave lam0=1 kappa=2 |
+| 260913_015620 | `260913_015620_noisekinds_linear.csv` | noisekinds_linear | kernel=linear, kinds=symmetric,asymmetric,far, rates=[0.4], steps=250 |
+| 260913_022641 | `260913_022641_noisekinds_linear.csv` | noisekinds_linear | kernel=linear, kinds=symmetric,asymmetric,boundary,far, rates=[0.3, 0.4, 0.5], steps=300 |
+| 260913_023447 | `260913_023447_rescue_linear.csv` | rescue_linear | kernel=linear, kinds=asymmetric, rates=[0.4, 0.5], steps=250 |
+| 260913_024844 | `260913_024844_rescue_linear.csv` | rescue_linear | kernel=linear, kinds=asymmetric,boundary, rates=[0.3, 0.4, 0.5], steps=300 |
+| 260913_030055 | `260913_030055_tunecmp_linear.csv` | tunecmp_linear | kernel=linear, datasets=heart, rates=[0.3], nested=outer5 inner3, steps=200, grids=svmC[1,10] d[.01,.1,1] eta[.2,.3,.4] wave24 wave2_4 |
+| 260913_030329 | `260913_030329_fixed_robust_linear.csv` | fixed_robust_linear | kernel=linear, robust=True, kinds=asymmetric, rates=[0.4], steps=200, note=new abs-lambda + empty guard |
+| 260913_033530 | `260913_033530_fixed_robust_linear.csv` | fixed_robust_linear | kernel=linear, robust=True, kinds=symmetric,asymmetric,boundary,far, rates=[0.3, 0.4, 0.5], steps=300, note=new abs-lambda + empty guard |
+| 260913_040421 | `260913_040421_fixed_robust_linear.csv` | fixed_robust_linear | kernel=linear, robust=True, kinds=symmetric,asymmetric,boundary,far, rates=[0.0, 0.2], steps=300, note=new abs-lambda + empty guard |
+| 260913_065526 | `260913_065526_tunecmp_linear.csv` | tunecmp_linear | kernel=linear, datasets=heart, rates=[0.3], nested=outer5 inner3, steps=200, models=svm,hard,wave, grids=svmC[1,10] d[.01,.1,1] wave C[1,10]xlam0[.25,.5,1,2,4] fixed-lambda |
+| 260913_065528 | `260913_065528_compare_linear.csv` | compare_linear | kernel=linear, datasets=heart, seeds=1, rates=[0.3], C=10.0, lam0=1.0, kappa=2.0, steps=200 |
+| 260913_070151 | `260913_070151_tunecmp_linear.csv` | tunecmp_linear | kernel=linear, datasets=balance_scale,breast_cancer,SPECTF,haberman,heart,ionosphere,sonar,banknote,australian,german, rates=[0.2, 0.3, 0.4], nested=outer5 inner3, steps=300, models=svm,hard,wave, grids=svmC[1,10] d[.01,.1,1] wave C[1,10]xlam0[.25,.5,1,2,4] fixed-lambda |
