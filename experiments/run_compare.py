@@ -82,8 +82,10 @@ def run(name, seeds, rates, wave_kw, steps, kernel):
                 acc["wave"].append(_wave(bh, Fte, yte, wave_kw))
                 acc["wave2"].append(_wave(bo, Fte, yte, wave_kw))
         for model, v in acc.items():
+            v = np.asarray(v, float)
             rows.append(dict(dataset=name, rate=rate, model=model,
-                             acc=float(np.nanmean(v)), acc_std=float(np.nanstd(v))))
+                             acc=float(np.nanmean(v)), acc_std=float(np.nanstd(v)),
+                             n_valid=int(np.sum(~np.isnan(v))), n_total=int(v.size)))
         print(f"  {name:13s} rate={rate:.1f}  " +
               "  ".join(f"{m}={np.nanmean(acc[m]):.3f}" for m in acc), flush=True)
     return rows
