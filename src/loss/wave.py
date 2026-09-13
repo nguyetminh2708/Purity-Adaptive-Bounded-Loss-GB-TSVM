@@ -24,21 +24,26 @@ def wave_grad(u, lam, a=1.0):
     return tp / (1.0 + lam * t) ** 2
 
 
-def lambda_adaptive(purity, size, radius, lam0=1.0, kappa=2.0,
-                    w_p=1.0, w_n=0.5, w_r=0.5):
-    """Per-ball ceiling lam_k = lam0 * exp(-kappa * s_k).
+def lambda_adaptive(purity, size=None, radius=None, lam0=1.0, kappa=2.0,
+                    p0=0.85, sharp=8.0):
+    """Per-ball ceiling from an ABSOLUTE purity map (no min-max over the set).
 
-    s_k in [0,1] rises with purity and size, falls with radius; each term is
-    min-max scaled across the current ball set. Trusted ball -> small lam -> high ceiling.
+        lam_k = lam0 * (1 + kappa * sigmoid(sharp * (p0 - purity_k)))
+
+    A ball below p0 gets a larger lam -> lower ceiling (1/lam) -> its influence is
+    capped harder; a clean ball keeps lam ~ lam0. Absolute so it does not degrade
+    when every ball has the same purity (e.g. purity=1), unlike a min-max scaling
+    that stretches tiny differences across [0,1]. size/radius are accepted for
+    signature compatibility but unused: they diluted the trust signal. Returns a
+    scalar lam0 if purity is missing or empty.
     """
-    def mm(x):
-        x = np.asarray(x, dtype=float)
-        lo, hi = x.min(), x.max()
-        return np.zeros_like(x) if hi - lo < 1e-12 else (x - lo) / (hi - lo)
-
-    s = (w_p * mm(purity) + w_n * mm(np.log1p(size)) + w_r * (1.0 - mm(radius)))
-    s = s / (w_p + w_n + w_r)
-    return lam0 * np.exp(-kappa * s)
+    if purity is None:
+        return lam0
+    purity = np.asarray(purity, dtype=float)
+    if purity.size == 0:
+        return lam0
+    s = 1.0 / (1.0 + np.exp(-np.clip(sharp * (p0 - purity), -30.0, 30.0)))
+    return lam0 * (1.0 + kappa * s)
 
 
 def numerical_gradient_check(a=1.0, lam=0.7, n=64, eps=1e-6, seed=0, tol=1e-5):

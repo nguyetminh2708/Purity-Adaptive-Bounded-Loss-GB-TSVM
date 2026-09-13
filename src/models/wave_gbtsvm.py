@@ -15,6 +15,10 @@ import numpy as np
 from loss.wave import wave_loss, wave_grad, lambda_adaptive
 
 
+class Degenerate(Exception):
+    """One side has no balls, so a twin plane cannot be fit."""
+
+
 def _adam(grad, z0, lr=0.05, steps=800, b1=0.9, b2=0.999, eps=1e-8):
     z = z0.copy(); m = np.zeros_like(z); v = np.zeros_like(z)
     for t in range(1, steps + 1):
@@ -50,6 +54,8 @@ class WaveGBTSVM:
     def fit(self, C, r, y, purity=None, size=None):
         C = np.asarray(C, float); r = np.asarray(r, float); y = np.asarray(y).ravel()
         pos, neg = y == 1, y == -1
+        if pos.sum() == 0 or neg.sum() == 0:
+            raise Degenerate("one side has no balls")
         C1, C2, r1, r2 = C[pos], C[neg], r[pos], r[neg]
         e1 = np.ones((len(C1), 1)); e2 = np.ones((len(C2), 1))
         H1 = np.hstack([C1, e1]); H2 = np.hstack([C2, e2])
