@@ -30,7 +30,7 @@ ETAS = [0.3, 0.4, 0.5]
 WAVE = list(product([1.0, 10.0], [0.5, 2.0, 4.0], [0.0, 2.0, 4.0]))
 
 
-def nested(name, rate, kind, kernel, seed=0, n_out=5, n_in=3, steps=300):
+def nested(name, rate, kind, kernel, seed=0, n_out=5, n_in=3, steps=300, purity=1.0):
     ds = load(name); X, y = ds["data"][:, :-1], ds["data"][:, -1]
     cls = np.unique(y); to_pm = lambda v: np.where(v == cls[0], 1.0, -1.0)
     acc = {m: [] for m in ("hard", "binom", "wave")}
@@ -53,7 +53,7 @@ def nested(name, rate, kind, kernel, seed=0, n_out=5, n_in=3, steps=300):
             if len(np.unique(yn[itr])) < 2:
                 continue
             sub = np.column_stack([Ftr[itr], yn[itr]])
-            bp = gen_balls(sub, pur=1.0, delbals=1, seed=seed)
+            bp = gen_balls(sub, pur=purity, delbals=1, seed=seed)
             for d in D_GRID:
                 s_hard[d].append(_gb(bp, Ftr[iva], yn[iva], d))
             for c in WAVE:
@@ -65,7 +65,7 @@ def nested(name, rate, kind, kernel, seed=0, n_out=5, n_in=3, steps=300):
 
         bh, bw, bb = _best(s_hard), _best(s_wave), _best(s_binom)
         sub = np.column_stack([Ftr, yn])
-        bp = gen_balls(sub, pur=1.0, delbals=1, seed=seed)
+        bp = gen_balls(sub, pur=purity, delbals=1, seed=seed)
         be = gen_balls(sub, pur=1.0, delbals=1, seed=seed, eta=bb[0], alpha=0.05)
         acc["hard"].append(_gb(bp, Fte, yte, bh))
         acc["wave"].append(_wave(bp, Fte, yte, bw, steps))
@@ -81,29 +81,36 @@ def main():
     ap.add_argument("--rates", nargs="*", type=float, default=[0.3, 0.4, 0.5])
     ap.add_argument("--kernel", choices=["linear", "rbf"], default="linear")
     ap.add_argument("--steps", type=int, default=300)
+    ap.add_argument("--purity", type=float, default=1.0)
+    ap.add_argument("--seeds", type=int, default=1,
+                    help="chay seed 0..N-1 (mac dinh 1 = chi seed 0, nhu cu)")
     ap.add_argument("--out", default=None)
     args = ap.parse_args()
 
     out = args.out or str(HERE.parent / "results" / f"_partial_noisekinds_{args.kernel}.csv")
     rows = []
-    print(f"{'dataset':13s}{'kind':>11}{'rate':>5}{'hard':>8}{'binom':>8}{'wave':>8}", flush=True)
+    print(f"{'dataset':13s}{'kind':>11}{'rate':>5}{'seed':>5}{'hard':>8}{'binom':>8}{'wave':>8}", flush=True)
     for name in args.datasets:
         for kind in args.kinds:
             for rate in args.rates:
-                t0 = time.time()
-                try:
-                    acc = nested(name, rate, kind, args.kernel, steps=args.steps)
-                except Exception as e:
-                    print(f"  skip {name}/{kind}/{rate}: {type(e).__name__}: {str(e)[:50]}", flush=True); continue
-                for m in acc:
-                    rows.append(dict(dataset=name, kind=kind, rate=rate, model=m,
-                                     acc=float(np.nanmean(acc[m])), acc_std=float(np.nanstd(acc[m]))))
-                pd.DataFrame(rows).to_csv(out, index=False)
-                print(f"{name:13s}{kind:>11}{rate:>5.1f}"
-                      f"{np.nanmean(acc['hard']):>8.3f}{np.nanmean(acc['binom']):>8.3f}{np.nanmean(acc['wave']):>8.3f}"
-                      f"   ({time.time()-t0:.0f}s)", flush=True)
-    fn = save_run(pd.DataFrame(rows), f"noisekinds_{args.kernel}",
-                  dict(kernel=args.kernel, kinds=",".join(args.kinds), rates=args.rates, steps=args.steps))
+                for seed in range(args.seeds):
+                    t0 = time.time()
+                    try:
+                        acc = nested(name, rate, kind, args.kernel, seed=seed,
+                                     steps=args.steps, purity=args.purity)
+                    except Exception as e:
+                        print(f"  skip {name}/{kind}/{rate}/s{seed}: {type(e).__name__}: {str(e)[:50]}", flush=True); continue
+                    for m in acc:
+                        rows.append(dict(dataset=name, kind=kind, rate=rate, seed=seed, model=m,
+                                         acc=float(np.nanmean(acc[m])), acc_std=float(np.nanstd(acc[m]))))
+                    pd.DataFrame(rows).to_csv(out, index=False)
+                    print(f"{name:13s}{kind:>11}{rate:>5.1f}{seed:>5d}"
+                          f"{np.nanmean(acc['hard']):>8.3f}{np.nanmean(acc['binom']):>8.3f}{np.nanmean(acc['wave']):>8.3f}"
+                          f"   ({time.time()-t0:.0f}s)", flush=True)
+    tag = f"noisekinds_{args.kernel}" + ("" if args.purity==1.0 else f"_pur{args.purity}")
+    fn = save_run(pd.DataFrame(rows), tag,
+                  dict(kernel=args.kernel, kinds=",".join(args.kinds), rates=args.rates,
+                       steps=args.steps, purity=args.purity, seeds=args.seeds))
     print(f"saved {fn}")
 
 

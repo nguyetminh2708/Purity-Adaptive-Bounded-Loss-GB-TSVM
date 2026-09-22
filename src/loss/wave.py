@@ -42,8 +42,12 @@ def lambda_adaptive(purity, size=None, radius=None, lam0=1.0, kappa=2.0,
     purity = np.asarray(purity, dtype=float)
     if purity.size == 0:
         return lam0
-    s = 1.0 / (1.0 + np.exp(-np.clip(sharp * (p0 - purity), -30.0, 30.0)))
-    return lam0 * (1.0 + kappa * s)
+    # --- Bản SIGMOID (ngưỡng mềm p0 + độ dốc sharp) — TẠM TẮT để thử linear ---
+    # s = 1.0 / (1.0 + np.exp(-np.clip(sharp * (p0 - purity), -30.0, 30.0)))
+    # return lam0 * (1.0 + kappa * s)
+    # --- Bản LINEAR: λ tăng tuyến tính theo độ lẫn (1 - purity). p0, sharp không dùng ---
+    impurity = np.clip(1.0 - purity, 0.0, 1.0)
+    return lam0 * (1.0 + kappa * impurity)
 
 
 def numerical_gradient_check(a=1.0, lam=0.7, n=64, eps=1e-6, seed=0, tol=1e-5):
