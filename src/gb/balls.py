@@ -24,7 +24,7 @@ class Ball:
     """A single granular ball. data: (n, d+2) = [features(d) | label | index]."""
 
     __slots__ = ("data", "X", "n", "dim", "center", "label", "purity", "radius",
-                 "n_major", "n_minor")
+                 "n_major", "n_minor", "center_major", "radius_median")
 
     def __init__(self, data):
         self.data = data
@@ -40,6 +40,15 @@ class Ball:
         self.n_minor = int(self.n - self.n_major)
         self.purity = self.n_major / self.n
         self.radius = float(np.sqrt(((self.X - self.center) ** 2).sum(axis=1)).mean())
+
+        # improvement #4: robust stats computed over the MAJORITY-label points
+        # only, so a mislabelled point cannot drag the centre or inflate the
+        # radius. center = mean of majority points, radius = median distance.
+        # Kept alongside the originals; models opt in via arrays(robust=True).
+        Xm = self.X[data[:, -2] == self.label]
+        self.center_major = Xm.mean(axis=0)
+        dm = np.sqrt(((Xm - self.center_major) ** 2).sum(axis=1))
+        self.radius_median = float(np.median(dm)) if len(dm) else 0.0
 
     def split(self, seed):
         """
@@ -128,16 +137,32 @@ def gen_balls(data, pur=1.0, delbals=0, seed=0, eta=None, alpha=0.05):
     return [b for b in balls if b.n >= delbals]
 
 
-def to_matrix(balls):
+def arrays(balls, robust=False):
+    """list[Ball] -> (centers, radii, labels, purities, sizes).
+
+    robust=True uses the majority-label centre and the median radius (improvement
+    #4); False keeps the original mean centre / mean radius (faithful baseline).
+    """
+    if robust:
+        C = np.array([b.center_major for b in balls])
+        r = np.array([b.radius_median for b in balls])
+    else:
+        C = np.array([b.center for b in balls])
+        r = np.array([b.radius for b in balls])
+    return (C, r,
+            np.array([b.label for b in balls]),
+            np.array([b.purity for b in balls]),
+            np.array([b.n for b in balls]))
+
+
+def to_matrix(balls, robust=False):
     """list[Ball] -> (m, d+2) = [center(d) | radius | label].
 
-    This is the ONLY shape allowed into fit. See contract.py.
+    This is the ONLY shape allowed into fit. See contract.py. robust=True swaps in
+    the majority-label centre and median radius (improvement #4).
     """
-    return np.column_stack([
-        np.array([b.center for b in balls]),
-        np.array([b.radius for b in balls]),
-        np.array([b.label for b in balls]),
-    ])
+    C, r, y, _, _ = arrays(balls, robust=robust)
+    return np.column_stack([C, r, y])
 
 
 def viable(balls, min_per_class=1, min_classes=2):

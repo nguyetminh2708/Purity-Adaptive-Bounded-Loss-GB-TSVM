@@ -148,6 +148,7 @@ def main():
     ap.add_argument("--pop", type=int, default=20)
     ap.add_argument("--steps", type=int, default=150)
     ap.add_argument("--seeds", type=int, default=1)
+    ap.add_argument("--out", default=None, help="CSV checkpoint (ghi mỗi bộ 1 dòng, resume nếu đã có)")
     args = ap.parse_args()
     print(f"kernel={args.kernel} algo={args.algo} epoch={args.epoch} pop={args.pop} "
           f"seeds={args.seeds} | nhiễu {args.kind} {args.rate}\n", flush=True)
@@ -161,24 +162,35 @@ def main():
                   f"{r['meta_evals']:>11d}{r['grid_evals']:>11d}{r['t_meta']:>10.0f}   "
                   f"{r['meta_par']} | {r['grid_par']}", flush=True)
         return
-    # ---- multi-seed: trung bình meta vs grid qua các seed ----
+    # ---- multi-seed: checkpoint theo TỪNG (bộ, seed) ra CSV (--out) để resume mượt ----
+    import csv, os
+    out_csv = getattr(args, "out", None)
+    done = set()
+    if out_csv and os.path.exists(out_csv):
+        with open(out_csv, newline="") as f:
+            for row in csv.DictReader(f):
+                done.add((row["dataset"], int(row["seed"])))
     for name in args.datasets:
-        mts, gts, per = [], [], []
         for seed in range(args.seeds):
+            if (name, seed) in done:
+                print(f"(bỏ qua {name} seed{seed}: đã có)", flush=True); continue
             try:
                 r = run_dataset(name, args.kind, args.rate, args.kernel, args.algo,
                                 args.epoch, args.pop, args.steps, seed=seed)
-                mts.append(r["meta_test"]); gts.append(r["grid_test"])
-                per.append(f"{r['meta_test']:.2f}/{r['grid_test']:.2f}")
-                print(f"  {name:11s} seed{seed}: meta {r['meta_test']:.3f} | grid {r['grid_test']:.3f}"
-                      f"  ({r['t_meta']:.0f}s)", flush=True)
             except Exception as e:
                 print(f"  {name} seed{seed} ERR: {type(e).__name__}: {str(e)[:60]}", flush=True)
-        if mts:
-            mts, gts = np.array(mts), np.array(gts)
-            wins = int((mts > gts).sum())
-            print(f"==> {name:11s} meta_TB {np.nanmean(mts):.3f} | grid_TB {np.nanmean(gts):.3f}"
-                  f" | Δ {np.nanmean(mts)-np.nanmean(gts):+.3f} | meta>grid {wins}/{len(mts)}\n", flush=True)
+                continue
+            print(f"  {name:11s} seed{seed}: meta {r['meta_test']:.3f} | grid {r['grid_test']:.3f}"
+                  f"  ({r['t_meta']:.0f}s)", flush=True)
+            if out_csv:
+                new = not os.path.exists(out_csv)
+                with open(out_csv, "a", newline="") as f:
+                    w = csv.writer(f)
+                    if new:
+                        w.writerow(["dataset", "seed", "meta_test", "grid_test",
+                                    "epoch", "pop", "steps", "kind", "rate"])
+                    w.writerow([name, seed, f"{r['meta_test']:.4f}", f"{r['grid_test']:.4f}",
+                                args.epoch, args.pop, args.steps, args.kind, args.rate])
 
 
 if __name__ == "__main__":

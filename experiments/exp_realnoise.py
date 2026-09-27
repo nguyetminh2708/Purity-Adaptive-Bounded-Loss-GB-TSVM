@@ -2,24 +2,21 @@
 CIFAR-10N cung cấp nhãn DO NGƯỜI gán (nhiễu thật) kèm nhãn SẠCH cho CIFAR-10.
 
 Ở đây dựng một bài NHỊ PHÂN TABULAR:
-  - lấy 2 lớp dễ nhầm (mặc định cat vs dog),
+  - lấy 2 lớp (mặc định cat vs dog),
   - đặc trưng: ảnh phẳng 3072 chiều -> chuẩn hóa -> PCA(--pca) -> MinMax(-1,1),
   - nhãn HUẤN LUYỆN = nhãn-người (nhiễu thật, chiếu về nhị phân),
   - nhãn KIỂM TRA  = nhãn sạch (tập test CIFAR-10),
-  - chạy: hard (GBTSVM) / wave (pur=1) / wave+rescue (pur=0.7 rescue-only).
+  - chạy: hard(pur=1) / wave(pur=1) / hard(P) / wave(P) / wave+rescue(P).
 
-CÁCH CHẠY (trên máy có internet):
-  1) pip install torch torchvision scikit-learn numpy   (nếu chưa có)
-  2) Tải nhãn CIFAR-10N: vào https://github.com/UCSC-REAL/cifar-10-100n
-     lấy file data/CIFAR-10_human.pt  đặt cạnh script (hoặc truyền --labels đường dẫn).
-  3) python experiments/exp_realnoise.py            (CIFAR-10 ảnh sẽ tự tải qua torchvision)
-     tùy chọn: --classes cat dog  --noise worse_label  --pca 50  --purity 0.7
+NHIỀU SEED: nhãn nhiễu & tách train/test là CỐ ĐỊNH (dữ liệu thật). Mỗi seed đổi
+PCA(random_state) và khởi tạo sinh bóng (2-means) -> đo ĐỘ ỔN ĐỊNH của pipeline.
 
-In ra: tỉ lệ nhiễu THẬT của bài nhị phân + accuracy hard/wave/wave_rescue trên test sạch.
+CÁCH CHẠY (trên máy có internet lần đầu để tải ảnh CIFAR-10):
+  python experiments/exp_realnoise.py --classes automobile truck --noise aggre_label --pca 100 --seeds 5
+  tùy chọn: --purity 0.7   --labels <đường_dẫn CIFAR-10_human.pt>
 """
 from __future__ import annotations
 import sys, pathlib, argparse
-from collections import Counter
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "src"))
 
@@ -27,47 +24,14 @@ import numpy as np
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.decomposition import PCA
 from sklearn.metrics import accuracy_score
-from gb.balls import gen_balls   # chỉ cần hàm này (tương thích cả balls.py cũ)
+from gb.balls import gen_balls, arrays
+from gb.rescue import rescue_arrays
 from models.wave_gbtsvm import WaveGBTSVM, Degenerate as WDeg
 from models.registry import fit_binary, decide, Degenerate
-
-
-def arrays(balls):
-    """(centers, radii, labels) — tự định nghĩa để khỏi phụ thuộc bản balls.py mới."""
-    return (np.array([b.center for b in balls]),
-            np.array([b.radius for b in balls]),
-            np.array([b.label for b in balls]))
-
-
-def viable(balls):
-    if not balls:
-        return False
-    c = Counter(b.label for b in balls)
-    return len(c) >= 2 and min(c.values()) >= 1
 
 WAVE = dict(c1=10.0, c2=10.0, lam0=1.0, kappa=0.0, adaptive_lambda=False)
 GB = dict(d1=0.1, d2=0.1, eps1=0.05, eps2=0.05)
 CIFAR = ["airplane","automobile","bird","cat","deer","dog","frog","horse","ship","truck"]
-ALL = (1.0, -1.0)
-
-
-def _radius(X, c):
-    return float(np.sqrt(((X - c) ** 2).sum(1)).mean()) if len(X) else 0.0
-
-
-def rescue_arrays(balls, floor=1):
-    C = [b.center for b in balls]; r = [b.radius for b in balls]; y = [b.label for b in balls]
-    cnt = Counter(b.label for b in balls)
-    threatened = {c for c in ALL if cnt.get(c, 0) < floor}
-    if threatened:
-        for b in balls:
-            labs = b.data[:, -2]
-            for c in threatened:
-                if c == b.label: continue
-                Xc = b.X[labs == c]
-                if len(Xc):
-                    cc = Xc.mean(0); C.append(cc); r.append(_radius(Xc, cc)); y.append(c)
-    return np.array(C), np.array(r), np.array(y)
 
 
 def _wave(C, r, y, F, yte):
@@ -101,7 +65,9 @@ def find_labels(user_path):
         f"và đặt vào: {DATA_RAW}  (hoặc truyền --labels <đường_dẫn>).")
 
 
-def load_cifar(labels_path, cls_pos, cls_neg, noise_key, pca_dim, seed=0):
+def load_raw(labels_path, cls_pos, cls_neg, noise_key):
+    """Tải + chuẩn hóa ảnh (KHÔNG PCA — để PCA đổi theo seed ở ngoài).
+    Trả (train chuẩn hóa, nhãn nhiễu train, test chuẩn hóa, nhãn sạch test, tỉ lệ nhiễu)."""
     import torch, torchvision
     root = str(DATA_RAW / "cifar10")     # ảnh CIFAR-10 tải về data/raw/cifar10
     tr = torchvision.datasets.CIFAR10(root=root, train=True, download=True)
@@ -116,23 +82,25 @@ def load_cifar(labels_path, cls_pos, cls_neg, noise_key, pca_dim, seed=0):
     ynoisy = np.array(human[noise_key]).reshape(-1)                 # nhãn nhiễu thật (train)
 
     ip, ino = CIFAR.index(cls_pos), CIFAR.index(cls_neg)
-    # tập train: mẫu có nhãn SẠCH thuộc {pos,neg}
-    m = np.isin(ytr_clean, [ip, ino])
+    m = np.isin(ytr_clean, [ip, ino])                              # train: nhãn SẠCH thuộc {pos,neg}
     Xtr, ytr_clean_b, ynoisy_b = Xtr[m], ytr_clean[m], ynoisy[m]
-    # nhãn nhị phân: +1 nếu = pos, -1 nếu = neg; nhãn người khác lớp -> coi là LẬT (nhiễu thật)
-    yc = np.where(ytr_clean_b == ip, 1.0, -1.0)
+    yc = np.where(ytr_clean_b == ip, 1.0, -1.0)                    # nhãn sạch nhị phân
     yn = np.where(ynoisy_b == ip, 1.0, np.where(ynoisy_b == ino, -1.0, -yc))  # lớp thứ ba = lật
-    # test: nhãn sạch
     mt = np.isin(yte_clean, [ip, ino])
     Xte, yte_b = Xte[mt], np.where(yte_clean[mt] == ip, 1.0, -1.0)
 
-    # đặc trưng: chuẩn hóa -> PCA -> MinMax(-1,1)
     ss = StandardScaler().fit(Xtr)
-    pca = PCA(n_components=pca_dim, random_state=seed).fit(ss.transform(Xtr))
-    Ftr = pca.transform(ss.transform(Xtr)); Fte = pca.transform(ss.transform(Xte))
-    mm = MinMaxScaler((-1, 1)).fit(Ftr); Ftr, Fte = mm.transform(Ftr), mm.transform(Fte)
+    Str_, Ste_ = ss.transform(Xtr), ss.transform(Xte)
     noise_rate = float((yn != yc).mean())
-    return Ftr, yn, Fte, yte_b, noise_rate
+    return Str_, yn, Ste_, yte_b, noise_rate
+
+
+def feats(Str_, Ste_, pca_dim, seed):
+    """PCA(random_state=seed) -> MinMax(-1,1). Đổi theo seed để đo độ ổn định."""
+    pca = PCA(n_components=pca_dim, random_state=seed).fit(Str_)
+    Ftr = pca.transform(Str_); Fte = pca.transform(Ste_)
+    mm = MinMaxScaler((-1, 1)).fit(Ftr)
+    return mm.transform(Ftr), mm.transform(Fte)
 
 
 def main():
@@ -143,29 +111,45 @@ def main():
                     help="worse_label(~40%) | aggre_label(~9%) | random_label1(~17%)")
     ap.add_argument("--pca", type=int, default=50)
     ap.add_argument("--purity", type=float, default=0.7)
+    ap.add_argument("--seeds", type=int, default=1, help="số seed (mỗi seed đổi PCA + sinh bóng)")
     args = ap.parse_args()
 
     labels_path = find_labels(args.labels)
     print(f"nhãn nhiễu thật: {labels_path}")
-    Ftr, yn, Fte, yte, nr = load_cifar(labels_path, args.classes[0], args.classes[1],
-                                       args.noise, args.pca)
+    Str_, yn, Ste_, yte, nr = load_raw(labels_path, args.classes[0], args.classes[1], args.noise)
     print(f"Bài nhị phân: {args.classes[0]} vs {args.classes[1]} | đặc trưng PCA={args.pca}")
-    print(f"Train {len(Ftr)} mẫu, tỉ lệ NHIỄU THẬT (nhị phân) = {nr:.1%} [{args.noise}]")
-    print(f"Test  {len(Fte)} mẫu (nhãn sạch)\n")
+    print(f"Train {len(Str_)} mẫu, tỉ lệ NHIỄU THẬT (nhị phân) = {nr:.1%} [{args.noise}]")
+    print(f"Test  {len(Ste_)} mẫu (nhãn sạch) | seeds={args.seeds}\n")
 
-    # bóng pur=1 cho hard & wave; pur=P cho hard/wave/rescue (so cùng điều kiện)
-    b1 = gen_balls(np.column_stack([Ftr, yn]), pur=1.0, delbals=1, seed=0)
-    bp = gen_balls(np.column_stack([Ftr, yn]), pur=args.purity, delbals=1, seed=0)
-    C1, r1, y1 = arrays(b1)
-    Cp, rp, yp = arrays(bp)          # pur=P thô (chưa rescue)
-    Cr, rr, yr = rescue_arrays(bp)   # pur=P + rescue-only
     P = args.purity
-    print(f"{'model':26s}{'acc test sạch':>14}")
-    print(f"{'GB hard (pur=1)':26s}{_hard(C1, r1, y1, Fte, yte):>14.3f}")
-    print(f"{'GB wave (pur=1)':26s}{_wave(C1, r1, y1, Fte, yte):>14.3f}")
-    print(f"{'GB hard (pur=%.1f)'%P:26s}{_hard(Cp, rp, yp, Fte, yte):>14.3f}")
-    print(f"{'GB wave (pur=%.1f)'%P:26s}{_wave(Cp, rp, yp, Fte, yte):>14.3f}")
-    print(f"{'GB wave+rescue (pur=%.1f)'%P:26s}{_wave(Cr, rr, yr, Fte, yte):>14.3f}")
+    cols = ["hard(p1)", "wave(p1)", f"hard({P})", f"wave({P})", f"wave+R({P})"]
+    acc = {c: [] for c in cols}
+    hdr = f"{'seed':>4}  " + "".join(f"{c:>12}" for c in cols)
+    print(hdr)
+    for s in range(args.seeds):
+        Ftr, Fte = feats(Str_, Ste_, args.pca, s)
+        sub = np.column_stack([Ftr, yn])
+        b1 = gen_balls(sub, pur=1.0, delbals=1, seed=s)
+        bp = gen_balls(sub, pur=P,   delbals=1, seed=s)
+        C1, r1, y1, _, _ = arrays(b1)
+        Cp, rp, yp, _, _ = arrays(bp)    # pur=P thô (chưa rescue)
+        Cr, rr, yr = rescue_arrays(bp)   # pur=P + rescue-only
+        row = [_hard(C1, r1, y1, Fte, yte), _wave(C1, r1, y1, Fte, yte),
+               _hard(Cp, rp, yp, Fte, yte), _wave(Cp, rp, yp, Fte, yte),
+               _wave(Cr, rr, yr, Fte, yte)]
+        for c, v in zip(cols, row):
+            acc[c].append(v)
+        print(f"{s:>4}  " + "".join(f"{('nan' if v != v else f'{v:.3f}'):>12}" for v in row))
+
+    print("-" * len(hdr))
+
+    def ms(c):
+        a = np.array(acc[c], float); a = a[~np.isnan(a)]
+        return (np.nan, np.nan, 0) if len(a) == 0 else (a.mean(), a.std(), len(a))
+
+    print(f"{'TB':>4}  " + "".join(f"{('nan' if ms(c)[2] == 0 else f'{ms(c)[0]:.3f}'):>12}" for c in cols))
+    print(f"{'±sd':>4}  " + "".join(f"{('' if ms(c)[2] == 0 else f'{ms(c)[1]:.3f}'):>12}" for c in cols))
+    print(f"{'n':>4}  " + "".join(f"{ms(c)[2]:>12}" for c in cols))
 
 
 if __name__ == "__main__":

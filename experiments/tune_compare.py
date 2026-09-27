@@ -39,8 +39,11 @@ from runlog import save_run
 
 SVM_C = [1.0, 10.0]
 D_GRID = [0.01, 0.1, 1.0]
+# wave with a FIXED lambda (kappa=0): lam0 is the tuned knob. Adaptive-lambda is
+# inert on purity=1 balls, so it is dropped from the main comparison.
+WAVE = list(product([1.0, 10.0], [0.25, 0.5, 1.0, 2.0, 4.0], [0.0]))
+# binom / wave2 grids kept for the ablation scripts; not used in this runner.
 ETAS = [0.2, 0.3, 0.4]
-WAVE = list(product([1.0, 10.0], [0.5, 1.0, 2.0, 4.0], [0.0, 2.0, 4.0]))
 WAVE2 = list(product([10.0], [1.0, 2.0], [2.0, 4.0]))
 
 
@@ -80,7 +83,7 @@ def _best(scores):
 def nested(name, rate, kernel, seed=0, n_out=5, n_in=3, steps=300):
     ds = load(name); X, y = ds["data"][:, :-1], ds["data"][:, -1]
     cls = np.unique(y); to_pm = lambda v: np.where(v == cls[0], 1.0, -1.0)
-    acc = {m: [] for m in ("svm", "hard", "binom", "wave", "wave2")}
+    acc = {m: [] for m in ("svm", "hard", "wave")}
     picks = {m: [] for m in acc}
     outer = StratifiedKFold(n_out, shuffle=True, random_state=seed)
     for tr, te in outer.split(X, y):
@@ -95,8 +98,6 @@ def nested(name, rate, kernel, seed=0, n_out=5, n_in=3, steps=300):
         s_svm = {c: [] for c in SVM_C}
         s_hard = {d: [] for d in D_GRID}
         s_wave = {c: [] for c in WAVE}
-        s_binom = {(e, d): [] for e in ETAS for d in D_GRID}
-        s_wave2 = {(e, c): [] for e in ETAS for c in WAVE2}
         inner = StratifiedKFold(n_in, shuffle=True, random_state=seed + 1)
         for itr, iva in inner.split(Ftr, yp):
             if len(np.unique(yp[itr])) < 2:
@@ -109,27 +110,15 @@ def nested(name, rate, kernel, seed=0, n_out=5, n_in=3, steps=300):
                 s_hard[d].append(_gb(bp, Ftr[iva], yp[iva], d))
             for c in WAVE:
                 s_wave[c].append(_wave(bp, Ftr[iva], yp[iva], c, steps))
-            for e in ETAS:
-                be = gen_balls(sub, pur=1.0, delbals=1, seed=seed, eta=e, alpha=0.05)
-                for d in D_GRID:
-                    s_binom[(e, d)].append(_gb(be, Ftr[iva], yp[iva], d))
-                for c in WAVE2:
-                    s_wave2[(e, c)].append(_wave(be, Ftr[iva], yp[iva], c, steps))
 
         b_svm, b_hard, b_wave = _best(s_svm), _best(s_hard), _best(s_wave)
-        b_binom, b_wave2 = _best(s_binom), _best(s_wave2)
         picks["svm"].append(b_svm); picks["hard"].append(b_hard); picks["wave"].append(b_wave)
-        picks["binom"].append(b_binom); picks["wave2"].append(b_wave2)
 
         sub = np.column_stack([Ftr, yp])
         bp = gen_balls(sub, pur=1.0, delbals=1, seed=seed)
-        be_b = gen_balls(sub, pur=1.0, delbals=1, seed=seed, eta=b_binom[0], alpha=0.05)
-        be_w = gen_balls(sub, pur=1.0, delbals=1, seed=seed, eta=b_wave2[0], alpha=0.05)
         acc["svm"].append(_svm(Xtr, yp, Xte, yte, b_svm, kernel))
         acc["hard"].append(_gb(bp, Fte, yte, b_hard))
-        acc["binom"].append(_gb(be_b, Fte, yte, b_binom[1]))
         acc["wave"].append(_wave(bp, Fte, yte, b_wave, steps))
-        acc["wave2"].append(_wave(be_w, Fte, yte, b_wave2[1], steps))
     return acc, picks
 
 
@@ -145,7 +134,7 @@ def main():
 
     out = args.out or str(HERE.parent / "results" / f"_partial_tunecmp_{args.kernel}.csv")
     rows = []
-    hdr = f"{'dataset':13s}{'rate':>5}" + "".join(f"{m:>8}" for m in ("svm", "hard", "binom", "wave", "wave2"))
+    hdr = f"{'dataset':13s}{'rate':>5}" + "".join(f"{m:>8}" for m in ("svm", "hard", "wave"))
     print(hdr, flush=True)
     for name in args.datasets:
         for rate in args.rates:
@@ -162,12 +151,12 @@ def main():
                                  acc=float(np.nanmean(v)), acc_std=float(np.nanstd(v)),
                                  pick=str(top[0][0]) if top else ""))
             pd.DataFrame(rows).to_csv(out, index=False)
-            means = "".join(f"{np.nanmean(acc[m]):>8.3f}" for m in ("svm", "hard", "binom", "wave", "wave2"))
+            means = "".join(f"{np.nanmean(acc[m]):>8.3f}" for m in ("svm", "hard", "wave"))
             print(f"{name:13s}{rate:>5.1f}{means}   ({time.time()-t0:.0f}s)", flush=True)
     fn = save_run(pd.DataFrame(rows), f"tunecmp_{args.kernel}",
                   dict(kernel=args.kernel, datasets=",".join(args.datasets), rates=args.rates,
-                       nested="outer5 inner3", steps=args.steps,
-                       grids="svmC[1,10] d[.01,.1,1] eta[.2,.3,.4] wave24 wave2_4"))
+                       nested="outer5 inner3", steps=args.steps, models="svm,hard,wave",
+                       grids="svmC[1,10] d[.01,.1,1] wave C[1,10]xlam0[.25,.5,1,2,4] fixed-lambda"))
     print(f"saved {fn}")
 
 

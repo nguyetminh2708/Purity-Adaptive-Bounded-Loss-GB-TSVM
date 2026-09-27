@@ -1,9 +1,11 @@
-"""Compare four granular-ball models under label noise.
+"""Compare the granular-ball models under label noise.
 
-    hard   GBTSVM, purity=1, hinge (original)
-    binom  GBTSVM, binomial ball generation (oracle eta = true rate), hinge
-    wave   Wave-GBTSVM on purity=1 balls
-    wave2  Wave-GBTSVM on binomial balls (two-stage: adaptive stopping + bounded loss)
+    svm    self-coded C-SVM (reference)
+    hard   GBTSVM, purity=1, hinge (baseline)
+    wave   Wave-GBTSVM on purity=1 balls, fixed lambda
+
+binom (binomial stopping) and wave2 (wave on binomial balls) remain implemented
+in src/ but are no longer run here -- see docs/KetQua_ThucNghiem.md §E.
 
     python experiments/run_compare.py [--datasets ...] [--seeds N] [--rates ...]
 
@@ -60,7 +62,9 @@ def run(name, seeds, rates, wave_kw, steps, kernel):
     cls = np.unique(y); to_pm = lambda v: np.where(v == cls[0], 1.0, -1.0)
     rows = []
     for rate in rates:
-        acc = {"svm": [], "hard": [], "binom": [], "wave": [], "wave2": []}
+        # binom / wave2 kept in the codebase but no longer run here: the paper
+        # focuses on wave (bounded loss on purity=1 balls) with a fixed lambda.
+        acc = {"svm": [], "hard": [], "wave": []}
         for seed in range(seeds):
             for tr, te in StratifiedKFold(5, shuffle=True, random_state=seed).split(X, y):
                 ytr = inject_label_noise(y[tr], rate, np.random.default_rng(seed))
@@ -76,11 +80,8 @@ def run(name, seeds, rates, wave_kw, steps, kernel):
                     Ftr, Fte = Xtr, Xte
                 sub = np.column_stack([Ftr, yp])
                 bh = gen_balls(sub, pur=1.0, delbals=1, seed=seed)
-                bo = gen_balls(sub, pur=1.0, delbals=1, seed=seed, eta=max(rate, 1e-9), alpha=0.05)
                 acc["hard"].append(_gbtsvm(bh, Fte, yte))
-                acc["binom"].append(_gbtsvm(bo, Fte, yte))
                 acc["wave"].append(_wave(bh, Fte, yte, wave_kw))
-                acc["wave2"].append(_wave(bo, Fte, yte, wave_kw))
         for model, v in acc.items():
             v = np.asarray(v, float)
             rows.append(dict(dataset=name, rate=rate, model=model,
@@ -102,8 +103,8 @@ def main():
     ap.add_argument("--steps", type=int, default=500)
     ap.add_argument("--kernel", choices=["linear", "rbf"], default="linear")
     args = ap.parse_args()
-    wave_kw = dict(c1=args.C, c2=args.C, lam0=args.lam0, kappa=args.kappa,
-                   adaptive_lambda=True, steps=args.steps)
+    wave_kw = dict(c1=args.C, c2=args.C, lam0=args.lam0, kappa=0.0,
+                   adaptive_lambda=False, steps=args.steps)
     rows = []
     for name in args.datasets:
         try:
