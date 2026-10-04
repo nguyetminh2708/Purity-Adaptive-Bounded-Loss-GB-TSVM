@@ -224,3 +224,6 @@ data/raw/globalcancer.csv
 
 # private research notes — keep local, do not push
 docs/
+data/raw/cifar10/cifar-10-batches-py/
+data/raw/cifar10/cifar-10-python.tar.gz
+results/PA-BL/
